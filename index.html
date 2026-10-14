@@ -36,6 +36,8 @@
   .chart-wrap { width:100%; overflow-x:auto; border:1px solid var(--line); border-radius:12px; padding:8px 4px 4px; }
   #distributionChart { display:block; width:100%; min-width:320px; height:auto; }
   .chart-note { color:var(--muted); font-size:.82rem; margin:7px 2px 0; }
+  .distribution-details { border:1px solid var(--line); border-radius:10px; padding:12px; }
+  .distribution-details summary { cursor:pointer; font-weight:600; }
   table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
   th,td { padding:8px 12px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap; }
   th { background:var(--bg); position:sticky; top:0; z-index:1; }
@@ -106,9 +108,12 @@
     <div class="chart-wrap">
       <svg id="distributionChart" viewBox="0 0 720 300" role="img" aria-label="出目ごとの発生確率を示す棒グラフ"></svg>
     </div>
-    <p class="chart-note">棒に触れる／マウスを重ねると、その出目と確率を確認できます。出目が多い場合は横にスクロールできます。</p>
-    <h2 style="margin-top:20px">確率分布（結果：発生確率）</h2>
-    <div id="distribution" class="distribution"></div>
+    <p id="chartSelection" class="chart-note" aria-live="polite">棒をタップ／クリックすると、出目と確率がここに表示されます。</p>
+    <p class="chart-note">出目が多い場合は横にスクロールできます。</p>
+    <details class="distribution-details" style="margin-top:16px">
+      <summary>確率分布表を開く</summary>
+      <div id="distribution" class="distribution" style="margin-top:10px"></div>
+    </details>
   </section>
 
   <footer>
@@ -352,6 +357,7 @@ function renderDistributionChart(sorted) {
   const svg = $("distributionChart");
   const NS = "http://www.w3.org/2000/svg";
   svg.replaceChildren();
+  $("chartSelection").textContent = "棒をタップ／クリックすると、出目と確率がここに表示されます。";
 
   // Keep bars comfortably wide on mobile; scroll horizontally for large distributions.
   const width = Math.max(720, sorted.length * 12 + 90);
@@ -391,11 +397,31 @@ function renderDistributionChart(sorted) {
     const y = margin.top + plotH - barH;
     const rect = add("rect", { x, y, width: barW, height: Math.max(0.5, barH),
       rx: Math.min(3, barW / 4), fill: "var(--accent)", opacity: 0.88,
-      tabindex: 0, role: "img", "aria-label": `出目 ${value}、確率 ${(probability * 100).toFixed(4)}%` });
-    // Attach a tooltip directly to each bar.
+      tabindex: 0, role: "button", "aria-label": `出目 ${value}、確率 ${(probability * 100).toFixed(4)}%`,
+      style: "cursor:pointer; outline:none" });
+    // Tooltip for desktop, plus explicit tap/click and keyboard support.
     const title = document.createElementNS(NS, "title");
     title.textContent = `出目 ${value}：${(probability * 100).toFixed(4)}%`;
     rect.append(title);
+    const showSelected = () => {
+      $("chartSelection").textContent = `出目 ${value}：確率 ${(probability * 100).toFixed(4)}%`;
+      svg.querySelectorAll("rect[data-selected='true']").forEach(el => {
+        el.removeAttribute("data-selected");
+        el.setAttribute("opacity", "0.88");
+        el.setAttribute("stroke", "none");
+      });
+      rect.setAttribute("data-selected", "true");
+      rect.setAttribute("opacity", "1");
+      rect.setAttribute("stroke", "currentColor");
+      rect.setAttribute("stroke-width", "1.5");
+    };
+    rect.addEventListener("click", showSelected);
+    rect.addEventListener("keydown", event => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        showSelected();
+      }
+    });
 
     const labelStride = sorted.length <= 24 ? 1 : Math.ceil(sorted.length / 18);
     if (index % labelStride === 0 || index === sorted.length - 1) {
